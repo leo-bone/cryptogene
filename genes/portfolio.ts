@@ -45,7 +45,11 @@ export class PortfolioGene extends BaseGene {
       ? `建议再平衡: ${rebalanceActions.join(', ')}`
       : '组合无需调整，当前已接近最优配置';
 
-    this.incrementRun(true);
+    // 真实结果：权重需归一（≈1）且风险平价收益优于等权配置才算成功
+    const weightsSum = targetWeights.reduce((a, b) => a + b, 0);
+    const equalWeightReturn = assets.reduce((s, a) => s + a.expectedReturn, 0) / assets.length;
+    const success = Math.abs(weightsSum - 1) < 0.01 && optimized.expectedReturn > equalWeightReturn;
+    this.incrementRun(success);
 
     return {
       geneId: this.id,
