@@ -34,9 +34,10 @@ export class RiskGene extends BaseGene {
     const var_ = this.calculateVaR(prices, 0.95); // 95% VaR
 
     // 凯利公式计算最优仓位
-    const winRate = 0.55; // 假设胜率 55%
-    const avgWin = 0.05;  // 平均盈利 5%
-    const avgLoss = 0.03; // 平均亏损 3%
+    // 胜率不再写死：优先采用本基因自身的历史统计，样本不足时回退到中性 0.5。
+    const winRate = this.runCount >= 10 ? this.successCount / this.runCount : 0.5;
+    const avgWin = 0.05;  // 平均盈利 5%（默认假设；实盘应以历史成交统计替换）
+    const avgLoss = 0.03; // 平均亏损 3%（默认假设；实盘应以历史成交统计替换）
     const kellyFraction = this.calculateKelly(winRate, avgWin, avgLoss);
 
     // 建议止损/止盈
@@ -62,11 +63,14 @@ export class RiskGene extends BaseGene {
       recommendation = `低波动环境，可正常仓位 ${(positionSize * 100).toFixed(1)}%，凯利建议 ${(kellyFraction * 100).toFixed(1)}%`;
     }
 
-    this.incrementRun(true);
+    // 真实结果：仅当给出有效（有限、正值）且非退化的仓位建议才算成功
+    const valid = Number.isFinite(positionSize) && positionSize > 0 &&
+      maxDrawdown < 0.5 && this.calculateRiskScore(volatility, maxDrawdown, var_) < 95;
+    this.incrementRun(valid);
 
     return {
       geneId: this.id,
-      success: true,
+      success: valid,
       signal: {
         action: 'hold',
         price: currentPrice,
