@@ -88,11 +88,14 @@ export class SignalGene extends BaseGene {
       confidence = 0.5;
     }
 
-    this.incrementRun(action !== 'hold');
+    // 信号基因没有盈亏闭环，"成功"只能定义为：给出了高置信度的明确方向信号。
+    // 不能用 "action !== 'hold'" —— 那等于任何非观望动作都算成功，胜率会虚高到接近 100%。
+    const signalSuccess = action !== 'hold' && confidence >= 0.7;
+    this.incrementRun(signalSuccess);
 
     return {
       geneId: this.id,
-      success: true,
+      success: signalSuccess,
       signal: {
         action,
         target: context.symbol,
@@ -117,14 +120,24 @@ export class SignalGene extends BaseGene {
   }
 
   private calculateMACD(prices: number[]): { macd: number; signal: number; histogram: number } {
-    const ema12 = this.EMA(prices, 12);
-    const ema26 = this.EMA(prices, 26);
-    const macd = ema12 - ema26;
-    const signal = this.EMA([macd], 9);
+    const ema12s = this.EMAseries(prices, 12);
+    const ema26s = this.EMAseries(prices, 26);
+    // ?? 不会捕获 NaN，必须用 Number.isNaN 把未成熟期的 EMA 值填 0，
+    // 否则 macdLine 出现 NaN 缺口，signal(EMA9) 线起始被推迟、计算失真。
+    const macdLine = prices.map(
+      (_, i) => (Number.isNaN(ema12s[i]) ? 0 : ema12s[i]) - (Number.isNaN(ema26s[i]) ? 0 : ema26s[i])
+    );
+    const signalLine = this.EMAseries(macdLine, 9);
+    const last = macdLine.length - 1;
+    const macd = macdLine[last];
+    // 若 signal(EMA9) 尚未成熟(NaN)，退化为 0 而不是回退成 macd ——
+    // 回退成 macd 会导致 histogram = macd - macd = 0，直方图恒为 0、完全失去意义。
+    const signal = !Number.isNaN(signalLine[last]) ? signalLine[last] : 0;
+    const histogram = macd - signal;
     return {
       macd,
       signal,
-      histogram: macd - signal
+      histogram
     };
   }
 
@@ -170,5 +183,37 @@ export class SignalGene extends BaseGene {
       ema = (prices[i] - ema) * multiplier + ema;
     }
     return ema;
+  }
+
+  private EMAseries(prices: number[], period: number): number[] {
+    const n = prices.length;
+    const result: number[] = new Array(n).fill(NaN);
+    if (n === 0) return result;
+    const multiplier = 2 / (period + 1);
+    const buffer: number[] = [];
+    let ema = 0;
+    let started = false;
+    for (let i = 0; i < n; i++) {
+      const p = prices[i];
+      if (Number.isNaN(p)) {
+        result[i] = started ? ema : NaN;
+        continue;
+      }
+      buffer.push(p);
+      if (!started) {
+        if (buffer.length === period) {
+          ema = buffer.reduce((a, b) => a + b, 0) / period;
+          result[i] = ema;
+          started = true;
+          buffer.length = 0;
+        } else {
+          result[i] = NaN;
+        }
+      } else {
+        ema = (p - ema) * multiplier + ema;
+        result[i] = ema;
+      }
+    }
+    return result;
   }
 }
