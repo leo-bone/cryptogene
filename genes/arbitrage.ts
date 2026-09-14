@@ -46,6 +46,10 @@ export class ArbitrageGene extends BaseGene {
     const fees = 0.1; // 手续费约 0.1%
     const netSpread = spreadPercent - fees * 2;
 
+    // 真实结果：仅当发现价差机会且实际成交（利润足够覆盖成本）才算成功
+    const opportunityFound = netSpread > 0;
+    const executed = netSpread > 0.5;
+
     // 生成信号
     let signal: TradeSignal | undefined;
     let recommendation: string;
@@ -59,21 +63,21 @@ export class ArbitrageGene extends BaseGene {
         price: minPrice.price,
         riskLevel: 'low'
       };
-      this.incrementRun(true);
+      this.incrementRun(opportunityFound && executed);
     } else if (netSpread > 0) {
       recommendation = `价差 ${spreadPercent.toFixed(2)}% 可覆盖成本，但利润较薄`;
       signal = {
         action: 'hold',
         riskLevel: 'medium'
       };
-      this.incrementRun(true);
+      this.incrementRun(opportunityFound && executed);
     } else {
       recommendation = `无套利机会，价差 ${spreadPercent.toFixed(2)}% 不足以覆盖手续费`;
       signal = {
         action: 'hold',
         riskLevel: 'low'
       };
-      this.incrementRun(true);
+      this.incrementRun(opportunityFound && executed);
     }
 
     return {
