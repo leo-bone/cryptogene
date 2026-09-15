@@ -59,15 +59,33 @@ cryptogene/
 ## 运行命令
 
 ```bash
-# 安装依赖
-npm install
+# 安装依赖（根目录 + web/ 各一次，或用 install:all）
+npm run install:all
 
-# 启动 API
-npm run api
+# 启动 API（默认端口 3001）
+npm run dev:api
 
-# 启动网页
-npm run web
+# 启动网页（Vite dev server）
+npm run dev:web
 
 # CLI 帮助
 npm run cli -- --help
 ```
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `PORT` | `3001` | API 服务端口 |
+| `BINANCE_BASE` | `https://data-api.binance.vision` | 行情数据源。默认的 `data-api.binance.vision` 与 `api.binance.com` 数据一致，但在中国大陆可访问；如你有可用线路，设 `BINANCE_BASE=https://api.binance.com` 即可切回 |
+
+### 前端如何连后端
+
+`web/src/App.tsx` 里的 `API_BASE` 目前硬编码为 `http://localhost:3001/api`，
+即**网页从哪里打开都会去找本机的 3001 端口**。因此：
+
+- 本地开发：先 `npm run dev:api`，再 `npm run dev:web`，功能完整。
+- 只看已构建的静态站（`dist/`，已部署在 `genes.uichain.org`）：
+  页面能打开，但**必须本机同时跑着 API 服务**才有基因/行情/分析数据，
+  否则所有请求都会失败。要部署到线上，需把 `API_BASE` 改成可配置
+  （如 Vite 的 `import.meta.env.VITE_API_BASE`）并把后端一起部署。
