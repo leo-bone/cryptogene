@@ -11,6 +11,11 @@ import axios from 'axios';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// api.binance.com is unreachable from mainland China and from a few corporate
+// networks; data-api.binance.vision serves the same public market data.
+const BINANCE_BASE =
+  process.env.BINANCE_BASE || 'https://data-api.binance.vision';
+
 // 中间件
 app.use(cors());
 app.use(express.json());
@@ -63,7 +68,7 @@ app.get('/api/price/:symbol', async (req, res) => {
   try {
     const { symbol } = req.params;
     const response = await axios.get(
-      `https://api.binance.com/api/v3/ticker/24hr`,
+      `${BINANCE_BASE}/api/v3/ticker/24hr`,
       { params: { symbol: symbol.toUpperCase() } }
     );
 
@@ -90,7 +95,7 @@ app.get('/api/klines/:symbol', async (req, res) => {
     const limit = parseInt(req.query.limit as string) || 100;
 
     const response = await axios.get(
-      `https://api.binance.com/api/v3/klines`,
+      `${BINANCE_BASE}/api/v3/klines`,
       {
         params: {
           symbol: symbol.toUpperCase(),
@@ -128,10 +133,12 @@ app.post('/api/analyze', async (req, res) => {
     };
 
     // 如果没有提供价格，尝试从 Binance 获取
-    if (prices.length === 0) {
+    // NOTE: read context.prices, not the raw `prices` param — callers that omit
+    // it pass undefined and `prices.length` throws before the fallback runs.
+    if (!context.prices || context.prices.length === 0) {
       try {
         const klinesResponse = await axios.get(
-          `https://api.binance.com/api/v3/klines`,
+          `${BINANCE_BASE}/api/v3/klines`,
           {
             params: {
               symbol: symbol?.toUpperCase() || 'BTCUSDT',
